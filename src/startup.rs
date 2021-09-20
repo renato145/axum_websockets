@@ -1,56 +1,87 @@
-// use crate::{
-//     configuration::{Settings, WebsocketSettings},
-//     websocket::{pc_usage::PcUsageSystem, python_repo::PythonRepoSystem, route::ws_index},
-// };
+use axum::{
+    extract::{
+        ws::{Message, WebSocket},
+        WebSocketUpgrade,
+    },
+    handler::get,
+    response::IntoResponse,
+    routing::BoxRoute,
+    Router, Server,
+};
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
+
+use crate::configuration::{Settings, WebsocketSettings};
 // use actix::Actor;
 // use actix_web::{
 //     dev::Server,
 //     web::{self, Data},
 //     App, HttpServer,
 // };
-// use std::net::TcpListener;
+use std::net::{SocketAddr, TcpListener};
 // use tracing_actix_web::TracingLogger;
 
-// pub struct Application {
-//     port: u16,
-//     server: Server,
-// }
+pub struct Application {
+    port: u16,
+    app: Router<BoxRoute>,
+}
 
-// impl Application {
-//     pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
-//         let address = format!("{}:{}", configuration.host, configuration.port);
-//         let listener = TcpListener::bind(&address)?;
-//         let port = listener.local_addr().unwrap().port();
-//         let server = run(listener, configuration.websocket)?;
-//         Ok(Self { port, server })
-//     }
+impl Application {
+    pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
+        let address = format!("{}:{}", configuration.host, configuration.port);
+        // let listener = SocketAddr::new(configuration.host, configuration.port);
 
-//     pub fn port(&self) -> u16 {
-//         self.port
-//     }
+        let listener = TcpListener::bind(&address)?;
+        let port = listener.local_addr().unwrap().port();
+        let app = build_app(listener, configuration.websocket)?;
+        // Ok(Self { port, server })
+        Ok(Self { port, app })
+    }
 
-//     pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
-//         self.server.await
-//     }
-// }
+    pub fn port(&self) -> u16 {
+        self.port
+    }
 
-// pub fn run(
-//     listener: TcpListener,
-//     websocket_settings: WebsocketSettings,
-// ) -> Result<Server, std::io::Error> {
-//     tracing::info!("{:?}", websocket_settings);
-//     let websocket_settings = Data::new(websocket_settings);
-//     let python_repo_server = Data::new(PythonRepoSystem::default().start());
-//     let pc_usage_server = Data::new(PcUsageSystem::default().start());
-//     let server = HttpServer::new(move || {
-//         App::new()
-//             .wrap(TracingLogger::default())
-//             .route("/ws/", web::get().to(ws_index))
-//             .app_data(websocket_settings.clone())
-//             .app_data(python_repo_server.clone())
-//             .app_data(pc_usage_server.clone())
-//     })
-//     .listen(listener)?
-//     .run();
-//     Ok(server)
-// }
+    // pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
+    //     self.server.await
+    // }
+}
+
+pub fn build_app(
+    listener: TcpListener,
+    websocket_settings: WebsocketSettings,
+) -> Result<Router<BoxRoute>, std::io::Error> {
+    tracing::info!("{:?}", websocket_settings);
+    let a = DefaultMakeSpan::default().include_headers(true);
+    let app = Router::new()
+        .route("/ws", get(ws_handler))
+        .layer(TraceLayer::new_for_http().make_span_with(a))
+        .boxed();
+    Ok(app)
+}
+
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_socket)
+}
+
+async fn handle_socket(mut socket: WebSocket) {
+    if let Some(msg) = socket.recv().await {
+        if let Ok(msg) = msg {
+            println!("Client says: {:?}", msg);
+        } else {
+            println!("client disconnected");
+            return;
+        }
+    }
+
+    loop {
+        if socket
+            .send(Message::Text(String::from("Hi!")))
+            .await
+            .is_err()
+        {
+            println!("client disconnected");
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    }
+}
