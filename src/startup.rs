@@ -1,12 +1,5 @@
 use axum::{
-    extract::{
-        ws::{Message, WebSocket},
-        WebSocketUpgrade,
-    },
-    handler::get,
-    response::IntoResponse,
-    routing::BoxRoute,
-    Router,
+    extract::WebSocketUpgrade, handler::get, response::IntoResponse, routing::BoxRoute, Router,
 };
 use tower_http::{
     trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
@@ -14,7 +7,10 @@ use tower_http::{
 };
 use tracing::Level;
 
-use crate::configuration::{Settings, WebsocketSettings};
+use crate::{
+    configuration::{Settings, WebsocketSettings},
+    websocket::handle_socket,
+};
 use std::net::SocketAddr;
 
 pub struct Application {
@@ -67,27 +63,4 @@ fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
 
 async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
-}
-
-async fn handle_socket(mut socket: WebSocket) {
-    if let Some(msg) = socket.recv().await {
-        if let Ok(msg) = msg {
-            println!("Client says: {:?}", msg);
-        } else {
-            println!("client disconnected");
-            return;
-        }
-    }
-
-    loop {
-        if socket
-            .send(Message::Text(String::from("Hi!")))
-            .await
-            .is_err()
-        {
-            println!("client disconnected");
-            return;
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(7)).await;
-    }
 }
