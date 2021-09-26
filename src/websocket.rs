@@ -10,7 +10,6 @@ use std::{
     time::Instant,
 };
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
 #[derive(thiserror::Error)]
 pub enum WebsocketError {
@@ -33,7 +32,6 @@ impl From<mpsc::error::SendError<WebsocketMessage>> for WebsocketError {
 }
 
 pub struct Session {
-    id: Uuid,
     hb: Mutex<Instant>,
     settings: WebsocketSettings,
 }
@@ -41,7 +39,6 @@ pub struct Session {
 impl Session {
     pub fn new(settings: &WebsocketSettings) -> Self {
         Session {
-            id: Uuid::new_v4(),
             hb: Mutex::new(Instant::now()),
             settings: settings.clone(),
         }

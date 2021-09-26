@@ -52,7 +52,7 @@ fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
     tracing::info!("{:?}", websocket_settings);
     let websocket_settings = Arc::new(websocket_settings);
 
-    let app = Router::new()
+    Router::new()
         .route("/ws", get(ws_handler))
         .layer(
             // More on TraceLayer: https://docs.rs/tower-http/0.1.1/tower_http/trace/index.html
@@ -66,8 +66,7 @@ fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
                 ),
         )
         .layer(AddExtensionLayer::new(websocket_settings))
-        .boxed();
-    app
+        .boxed()
 }
 
 async fn ws_handler(
