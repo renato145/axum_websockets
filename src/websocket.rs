@@ -1,4 +1,4 @@
-use crate::{configuration::WebsocketSettings, error_chain_fmt};
+use crate::{configuration::WebsocketSettings, error::WebsocketError, message::WebsocketMessage};
 use anyhow::Context;
 use axum::extract::ws::{Message, WebSocket};
 use futures::{
@@ -10,26 +10,6 @@ use std::{
     time::Instant,
 };
 use tokio::sync::mpsc;
-
-#[derive(thiserror::Error)]
-pub enum WebsocketError {
-    #[error("Channel closed.")]
-    MpscSendError,
-    #[error(transparent)]
-    UnexpectedError(#[from] anyhow::Error),
-}
-
-impl std::fmt::Debug for WebsocketError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
-
-impl From<mpsc::error::SendError<WebsocketMessage>> for WebsocketError {
-    fn from(_: mpsc::error::SendError<WebsocketMessage>) -> Self {
-        WebsocketError::MpscSendError
-    }
-}
 
 pub struct Session {
     hb: Mutex<Instant>,
@@ -66,11 +46,6 @@ impl Session {
     }
 }
 
-enum WebsocketMessage {
-    Ping(Vec<u8>),
-    Close,
-}
-
 #[tracing::instrument(
 	name = "Handling websocket message",
 	skip(socket, settings),
@@ -102,6 +77,11 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
     }
 }
 
+#[tracing::instrument(
+    name = "Receiving message from client",
+    skip(socket_receiver, session, sender),
+    level = "debug"
+)]
 async fn client_receive_task(
     mut socket_receiver: SplitStream<WebSocket>,
     session: Arc<Session>,
@@ -131,6 +111,11 @@ async fn client_receive_task(
     Ok(())
 }
 
+#[tracing::instrument(
+    name = "Receiving internal message",
+    skip(rx, socket_sender),
+    level = "debug"
+)]
 async fn receive_message(
     mut rx: mpsc::Receiver<WebsocketMessage>,
     mut socket_sender: SplitSink<WebSocket, Message>,
