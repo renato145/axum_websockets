@@ -1,4 +1,9 @@
-use crate::{configuration::WebsocketSettings, error::WebsocketError, message::WebsocketMessage};
+use crate::{
+    configuration::WebsocketSettings,
+    error::WebsocketError,
+    message::{ClientMessage, ResultMessage, WebsocketMessage},
+    subsystems::WebsocketSystem,
+};
 use anyhow::Context;
 use axum::extract::ws::{Message, WebSocket};
 use futures::{
@@ -90,7 +95,19 @@ async fn client_receive_task(
             Ok(msg) => {
                 tracing::debug!("Received: {:?}", msg);
                 match msg {
-                    Message::Text(msg) => tracing::info!("Received: {:?}", msg),
+                    Message::Text(msg) => match serde_json::from_str::<ClientMessage>(&msg) {
+                        Ok(msg) => match msg.system {
+                            WebsocketSystem::PythonRepo => todo!(),
+                        },
+                        Err(e) => {
+                            tracing::info!("Failed to deserialize message: {:?}", e);
+                            sender
+                                .send(WebsocketMessage::TaskResult(ResultMessage::from_error(
+                                    e, None,
+                                )))
+                                .await?;
+                        }
+                    },
                     Message::Binary(_) => {
                         tracing::info!("Invalid binary message from client.");
                     }
@@ -133,6 +150,14 @@ async fn receive_message(
                     .await
                     .context("Failed to send Close message to socket.")?;
                 break;
+            }
+            WebsocketMessage::TaskResult(msg) => {
+                let msg =
+                    serde_json::to_string(&msg).context("Failed to serialize ClientMessage")?;
+                socket_sender
+                    .send(Message::Text(msg))
+                    .await
+                    .context("Failed to send ClientMessage to socket.")?;
             }
         }
     }

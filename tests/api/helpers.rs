@@ -1,7 +1,7 @@
 use awc::Client;
 use axum_websockets::{
     configuration::get_configuration,
-    message::ClientMessage,
+    message::ResultMessage,
     telemetry::{get_subscriber, init_subscriber},
     Application,
 };
@@ -29,7 +29,7 @@ pub struct TestApp {
 }
 
 impl TestApp {
-    pub async fn get_first_result(&self, message: &str) -> ClientMessage {
+    pub async fn get_first_result(&self, message: &str) -> ResultMessage {
         let (_response, mut connection) = Client::new()
             .ws(format!("{}/ws/", self.address))
             .connect()
@@ -44,7 +44,7 @@ impl TestApp {
         loop {
             match connection.next().await {
                 Some(Ok(awc::ws::Frame::Text(msg))) => {
-                    let msg = serde_json::from_slice::<ClientMessage>(&msg)
+                    let msg = serde_json::from_slice::<ResultMessage>(&msg)
                         .expect(&format!("Failed to parse JSON: {:?}", msg));
                     tracing::info!("RESULT: {:?}", msg);
                     return msg;
