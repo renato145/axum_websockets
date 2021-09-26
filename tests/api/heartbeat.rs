@@ -1,16 +1,16 @@
 use crate::helpers::spawn_app;
-use actix_web_actors::ws;
-use awc::Client;
+use awc::{Client};
 use futures::{SinkExt, StreamExt};
 use std::time::Duration;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn client_receives_heartbeat_every_x_milliseconds() {
     // Arrange
     let app = spawn_app().await;
+    tracing::info!("{}", app.address);
 
     let (_response, mut connection) = Client::new()
-        .ws(format!("{}/ws/", app.address))
+        .ws(format!("{}/ws", app.address))
         .connect()
         .await
         .expect("Failed to connect to websocket.");
@@ -37,7 +37,7 @@ async fn client_receives_heartbeat_every_x_milliseconds() {
     assert!(count >= 0, "Did not receive any heartbeat.")
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn client_disconnects_after_x_milliseconds() {
     // Arrange
     let app = spawn_app().await;
@@ -73,7 +73,7 @@ async fn client_disconnects_after_x_milliseconds() {
     assert!(disconnected, "Server did not disconnect.")
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn client_stays_alive_if_responds_pings() {
     // Arrange
     let app = spawn_app().await;
@@ -94,7 +94,7 @@ async fn client_stays_alive_if_responds_pings() {
             msg = connection.next() => {
                 tracing::info!("==> {:?}", msg);
                 match msg {
-                    Some(Ok(ws::Frame::Ping(msg))) => {
+                    Some(Ok(awc::ws::Frame::Ping(msg))) => {
                         connection
                             .send(awc::ws::Message::Pong(msg))
                             .await

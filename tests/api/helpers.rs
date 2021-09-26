@@ -1,12 +1,8 @@
-use actix_web_actors::ws;
-use actix_websockets::{
+use axum_websockets::{
     configuration::get_configuration,
-    startup::Application,
     telemetry::{get_subscriber, init_subscriber},
-    websocket::message::ClientMessage,
+    Application,
 };
-use awc::Client;
-use futures::{SinkExt, StreamExt};
 use once_cell::sync::Lazy;
 use std::time::Duration;
 
@@ -29,36 +25,43 @@ pub struct TestApp {
     pub port: u16,
 }
 
-impl TestApp {
-    pub async fn get_first_result(&self, message: &str) -> ClientMessage {
-        let (_response, mut connection) = Client::new()
-            .ws(format!("{}/ws/", self.address))
-            .connect()
-            .await
-            .expect("Failed to connect to websocket.");
+// impl TestApp {
+//     pub async fn get_first_result(&self, message: &str) -> ClientMessage {
+//         let (_response, mut connection) = Client::new()
+//             .ws(format!("{}/ws/", self.address))
+//             .connect()
+//             .await
+//             .expect("Failed to connect to websocket.");
 
-        connection
-            .send(awc::ws::Message::Text(message.into()))
-            .await
-            .expect("Failed to send message.");
+//         connection
+//             .send(awc::ws::Message::Text(message.into()))
+//             .await
+//             .expect("Failed to send message.");
 
-        loop {
-            match connection.next().await {
-                Some(Ok(ws::Frame::Text(msg))) => {
-                    let msg = serde_json::from_slice::<ClientMessage>(&msg)
-                        .expect(&format!("Failed to parse JSON: {:?}", msg));
-                    tracing::info!("RESULT: {:?}", msg);
-                    return msg;
-                }
-                Some(Ok(ws::Frame::Ping(_))) => {}
-                err => {
-                    tracing::error!("Receive message: {:?}", err);
-                    panic!("Failed to receive message.");
-                }
-            }
-        }
-    }
-}
+//         loop {
+
+//             // match connection.next().await {
+//             //     Some(o) => todo!(),
+//             //     None => todo!(),
+//             // }
+
+//             match connection.next().await {
+//                 Some(Ok(ws::Frame::Text(msg))) => {
+//                     let msg = serde_json::from_slice::<ClientMessage>(&msg)
+//                         .expect(&format!("Failed to parse JSON: {:?}", msg));
+//                     tracing::info!("RESULT: {:?}", msg);
+//                     return msg;
+//                 }
+//                 Some(Ok(ws::Frame::Ping(_))) => {}
+//                 err => {
+//                     tracing::error!("Receive message: {:?}", err);
+//                     panic!("Failed to receive message.");
+//                 }
+//             }
+
+//         }
+//     }
+// }
 
 pub async fn spawn_app() -> TestApp {
     // Set up tracing
@@ -75,9 +78,7 @@ pub async fn spawn_app() -> TestApp {
     };
 
     // Launch app as background task
-    let application = Application::build(configuration)
-        .await
-        .expect("Failed to build application.");
+    let application = Application::build(configuration);
     let application_port = application.port();
     let _ = tokio::spawn(application.run_until_stopped());
 

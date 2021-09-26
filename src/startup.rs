@@ -1,5 +1,9 @@
 use axum::{
-    extract::WebSocketUpgrade, handler::get, response::IntoResponse, routing::BoxRoute, Router,
+    extract::{Extension, WebSocketUpgrade},
+    handler::get,
+    response::IntoResponse,
+    routing::BoxRoute,
+    AddExtensionLayer, Router,
 };
 use tower_http::{
     trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
@@ -11,7 +15,7 @@ use crate::{
     configuration::{Settings, WebsocketSettings},
     websocket::handle_socket,
 };
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 pub struct Application {
     listener: SocketAddr,
@@ -44,6 +48,8 @@ impl Application {
 
 fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
     tracing::info!("{:?}", websocket_settings);
+    let websocket_settings = Arc::new(websocket_settings);
+
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .layer(
@@ -57,10 +63,14 @@ fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
                         .latency_unit(LatencyUnit::Micros),
                 ),
         )
+        .layer(AddExtensionLayer::new(websocket_settings))
         .boxed();
     app
 }
 
-async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    Extension(websocket_settings): Extension<Arc<WebsocketSettings>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, websocket_settings))
 }
