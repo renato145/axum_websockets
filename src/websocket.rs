@@ -26,6 +26,7 @@ impl Session {
 
     /// Sends ping to client every x seconds.
     /// Also checks heartbeats from client.
+    #[tracing::instrument(name = "Heartbeat task", level = "debug", skip(self, sender))]
     async fn hb(&self, sender: mpsc::Sender<WebsocketMessage>) -> Result<(), WebsocketError> {
         let mut interval = tokio::time::interval(self.settings.heartbeat_interval);
         loop {
@@ -40,17 +41,13 @@ impl Session {
                 return Ok(());
             }
             // Send ping
-            tracing::debug!("Sending ping...");
+            tracing::debug!("Sending ping.");
             sender.send(WebsocketMessage::Ping(vec![])).await?;
         }
     }
 }
 
-#[tracing::instrument(
-	name = "Handling websocket message",
-	skip(socket, settings),
-	// fields(message=tracing::field::Empty)
-)]
+#[tracing::instrument(name = "Handling websocket message", skip(socket, settings))]
 pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) {
     let session = Arc::new(Session::new(&settings));
     let (socket_sender, socket_receiver) = socket.split();
@@ -78,9 +75,9 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
 }
 
 #[tracing::instrument(
-    name = "Receiving message from client",
-    skip(socket_receiver, session, sender),
-    level = "debug"
+    name = "Client receiver task",
+    level = "debug",
+    skip(socket_receiver, session, sender)
 )]
 async fn client_receive_task(
     mut socket_receiver: SplitStream<WebSocket>,
@@ -90,37 +87,39 @@ async fn client_receive_task(
     while let Some(msg) = socket_receiver.next().await {
         match msg {
             Err(e) => tracing::info!("Client disconnected: {:?}", e),
-            Ok(msg) => match msg {
-                Message::Text(msg) => tracing::info!("Received: {:?}", msg),
-                Message::Binary(_) => {
-                    tracing::info!("Invalid binary message from client.");
+            Ok(msg) => {
+                tracing::debug!("Received: {:?}", msg);
+                match msg {
+                    Message::Text(msg) => tracing::info!("Received: {:?}", msg),
+                    Message::Binary(_) => {
+                        tracing::info!("Invalid binary message from client.");
+                    }
+                    Message::Ping(msg) => {
+                        *session.hb.lock().unwrap() = Instant::now();
+                        sender.send(WebsocketMessage::Ping(msg)).await?;
+                    }
+                    Message::Pong(_) => {
+                        *session.hb.lock().unwrap() = Instant::now();
+                    }
+                    Message::Close(_) => todo!(),
                 }
-                Message::Ping(msg) => {
-                    tracing::debug!("Received Ping from client.");
-                    *session.hb.lock().unwrap() = Instant::now();
-                    sender.send(WebsocketMessage::Ping(msg)).await?;
-                }
-                Message::Pong(_) => {
-                    tracing::debug!("Received Pong from client.");
-                    *session.hb.lock().unwrap() = Instant::now();
-                }
-                Message::Close(_) => todo!(),
-            },
+            }
         }
     }
     Ok(())
 }
 
 #[tracing::instrument(
-    name = "Receiving internal message",
-    skip(rx, socket_sender),
+    name = "Internal receiver task",
     level = "debug"
+    skip(rx, socket_sender),
 )]
 async fn receive_message(
     mut rx: mpsc::Receiver<WebsocketMessage>,
     mut socket_sender: SplitSink<WebSocket, Message>,
 ) -> Result<(), WebsocketError> {
     while let Some(msg) = rx.recv().await {
+        tracing::debug!("Received: {:?}", msg);
         match msg {
             WebsocketMessage::Ping(msg) => {
                 socket_sender
