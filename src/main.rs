@@ -10,7 +10,7 @@ async fn main() -> Result<(), hyper::Error> {
     init_subscriber(subscriber);
 
     let configuration = get_configuration().expect("Failed to read configuration.");
-    let application = Application::build(configuration);
+    let application = Application::build(configuration).expect("Failed to build application.");
     application.run_until_stopped().await?;
     Ok(())
 }

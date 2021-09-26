@@ -2,13 +2,12 @@ use serde::Deserialize;
 use serde_with::{serde_as, DurationMilliSeconds};
 use std::{
     convert::{TryFrom, TryInto},
-    net::IpAddr,
     time::Duration,
 };
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Settings {
-    pub ip: IpAddr,
+    pub host: String,
     pub port: u16,
     pub websocket: WebsocketSettings,
 }

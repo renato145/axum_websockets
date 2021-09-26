@@ -89,7 +89,7 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
         let tx = tx.clone();
         async move { client_receive_task(socket_receiver, session, tx).await }
     });
-    let mut recv_task = tokio::spawn(async move { receive_message(rx, socket_sender).await });
+    let mut recv_task = tokio::spawn(receive_message(rx, socket_sender));
     let mut hb_task = tokio::spawn(async move { session.hb(tx).await });
 
     let result = tokio::select! {
@@ -144,9 +144,13 @@ async fn receive_message(
                 socket_sender
                     .send(Message::Ping(msg))
                     .await
-                    .context("Failed to send ping to socket")?;
+                    .context("Failed to send Ping message to socket.")?;
             }
             WebsocketMessage::Close => {
+                socket_sender
+                    .send(Message::Close(None))
+                    .await
+                    .context("Failed to send Close message to socket.")?;
                 break;
             }
         }

@@ -15,24 +15,26 @@ use crate::{
     configuration::{Settings, WebsocketSettings},
     websocket::handle_socket,
 };
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::TcpListener, sync::Arc};
 
 pub struct Application {
-    listener: SocketAddr,
+    listener: TcpListener,
     port: u16,
     app: Router<BoxRoute>,
 }
 
 impl Application {
-    pub fn build(configuration: Settings) -> Self {
-        let listener = SocketAddr::new(configuration.ip, configuration.port);
-        let port = listener.port();
+    pub fn build(configuration: Settings) -> Result<Self, std::io::Error> {
+        // let listener = SocketAddr::new(configuration.ip, configuration.port);
+        let address = format!("{}:{}", configuration.host, configuration.port);
+        let listener = TcpListener::bind(&address)?;
+        let port = listener.local_addr()?.port();
         let app = build_app(configuration.websocket);
-        Self {
+        Ok(Self {
             listener,
             port,
             app,
-        }
+        })
     }
 
     pub fn port(&self) -> u16 {
@@ -40,7 +42,7 @@ impl Application {
     }
 
     pub async fn run_until_stopped(self) -> Result<(), hyper::Error> {
-        axum::Server::bind(&self.listener)
+        axum::Server::from_tcp(self.listener)?
             .serve(self.app.into_make_service())
             .await
     }
