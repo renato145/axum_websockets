@@ -23,6 +23,15 @@ pub struct TaskMessage {
     pub payload: serde_json::Value,
 }
 
+impl From<ClientMessage> for TaskMessage {
+    fn from(msg: ClientMessage) -> Self {
+        Self {
+            name: msg.task,
+            payload: msg.payload,
+        }
+    }
+}
+
 /// Messages to send to client.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResultMessage {

@@ -11,7 +11,7 @@ pub enum WebsocketSystem {
 }
 
 #[async_trait::async_trait]
-trait Subsystem {
+pub trait Subsystem {
     type Error;
     type Task;
 

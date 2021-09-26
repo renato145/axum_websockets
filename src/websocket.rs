@@ -1,8 +1,8 @@
 use crate::{
     configuration::WebsocketSettings,
     error::WebsocketError,
-    message::{ClientMessage, ResultMessage, WebsocketMessage},
-    subsystems::WebsocketSystem,
+    message::{ClientMessage, ResultMessage, TaskMessage, WebsocketMessage},
+    subsystems::{python_repo::PythonRepoSystem, Subsystem, WebsocketSystem},
 };
 use anyhow::Context;
 use axum::extract::ws::{Message, WebSocket};
@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 pub struct Session {
     hb: Mutex<Instant>,
@@ -58,18 +58,28 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
     let (socket_sender, socket_receiver) = socket.split();
     let (tx, rx) = mpsc::channel(32);
 
+    let mut recv_task = tokio::spawn(receive_message(rx, socket_sender));
+    let mut hb_task = tokio::spawn({
+        let tx = tx.clone();
+        async move { session.hb(tx).await }
+    });
+
+    let python_repo_system = PythonRepoSystem {};
+    let (python_repo_tx, python_repo_rx) = oneshot::channel();
+    let mut python_repo_task =
+        tokio::spawn(async move { python_repo_system.handle_messages(python_repo_rx, tx).await });
+
     let mut client_recv_task = tokio::spawn({
         let session = session.clone();
         let tx = tx.clone();
-        async move { client_receive_task(socket_receiver, session, tx).await }
+        async move { client_receive_task(socket_receiver, session, tx, python_repo_tx).await }
     });
-    let mut recv_task = tokio::spawn(receive_message(rx, socket_sender));
-    let mut hb_task = tokio::spawn(async move { session.hb(tx).await });
 
     let result = tokio::select! {
         a = (&mut client_recv_task) => a,
         b = (&mut recv_task) => b,
-        c = (&mut hb_task) => c
+        c = (&mut python_repo_task) => c
+        d = (&mut hb_task) => d
     };
 
     match result {
@@ -82,12 +92,13 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
 #[tracing::instrument(
     name = "Client receiver task",
     level = "debug",
-    skip(socket_receiver, session, sender)
+    skip(socket_receiver, session, sender, python_repo_tx)
 )]
 async fn client_receive_task(
     mut socket_receiver: SplitStream<WebSocket>,
     session: Arc<Session>,
     sender: mpsc::Sender<WebsocketMessage>,
+    python_repo_tx: oneshot::Sender<TaskMessage>,
 ) -> Result<(), WebsocketError> {
     while let Some(msg) = socket_receiver.next().await {
         match msg {
@@ -97,7 +108,9 @@ async fn client_receive_task(
                 match msg {
                     Message::Text(msg) => match serde_json::from_str::<ClientMessage>(&msg) {
                         Ok(msg) => match msg.system {
-                            WebsocketSystem::PythonRepo => todo!(),
+                            WebsocketSystem::PythonRepo => {
+                                python_repo_tx.send(msg.into());
+                            }
                         },
                         Err(e) => {
                             tracing::info!("Failed to deserialize message: {:?}", e);
