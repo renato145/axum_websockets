@@ -1,4 +1,4 @@
-use tracing::{subscriber::set_global_default, Subscriber};
+use tracing::{subscriber::set_global_default, Instrument, Subscriber};
 use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 use tracing_log::LogTracer;
 use tracing_subscriber::{
@@ -28,12 +28,11 @@ pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     set_global_default(subscriber).expect("Failed to set subscriber.");
 }
 
-// use actix_web::rt::task::JoinHandle;
-// pub fn spawn_blocking<F, R>(f: F) -> JoinHandle<R>
-// where
-//     F: FnOnce() -> R + Send + 'static,
-//     R: Send + 'static,
-// {
-//     let current_span = tracing::Span::current();
-//     actix_web::rt::task::spawn_blocking(move || current_span.in_scope(f))
-// }
+pub fn tokio_spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
+where
+    T: std::future::Future + Send + 'static,
+    T::Output: Send + 'static,
+{
+    let current_span = tracing::Span::current();
+    tokio::spawn(future.instrument(current_span))
+}

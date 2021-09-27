@@ -3,6 +3,7 @@ use crate::{
     error::WebsocketError,
     message::{ClientMessage, ResultMessage, TaskMessage, WebsocketMessage},
     subsystems::{python_repo::PythonRepoSystem, Subsystem, WebsocketSystem},
+    telemetry::tokio_spawn,
 };
 use anyhow::Context;
 use axum::extract::ws::{Message, WebSocket};
@@ -58,8 +59,8 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
     let (socket_sender, socket_receiver) = socket.split();
     let (tx, rx) = mpsc::channel(32);
 
-    let mut recv_task = tokio::spawn(receive_message(rx, socket_sender));
-    let mut hb_task = tokio::spawn({
+    let mut recv_task = tokio_spawn(receive_message(rx, socket_sender));
+    let mut hb_task = tokio_spawn({
         let tx = tx.clone();
         let session = session.clone();
         async move { session.hb(tx).await }
@@ -67,12 +68,12 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
 
     let python_repo_system = PythonRepoSystem {};
     let (python_repo_tx, python_repo_rx) = mpsc::channel(32);
-    let mut python_repo_task = tokio::spawn({
+    let mut python_repo_task = tokio_spawn({
         let tx = tx.clone();
         async move { python_repo_system.handle_messages(python_repo_rx, tx).await }
     });
 
-    let mut client_recv_task = tokio::spawn({
+    let mut client_recv_task = tokio_spawn({
         let session = session.clone();
         let tx = tx.clone();
         async move { client_receive_task(socket_receiver, session, tx, python_repo_tx).await }

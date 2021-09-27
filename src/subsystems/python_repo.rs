@@ -30,6 +30,7 @@ impl Subsystem for PythonRepoSystem {
         WebsocketSystem::PythonRepo
     }
 
+    #[tracing::instrument(name = "Handling PythonRepo message", skip(self))]
     async fn handle_message(
         &self,
         task: Self::Task,
@@ -41,7 +42,7 @@ impl Subsystem for PythonRepoSystem {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Task {
     GetFiles,
