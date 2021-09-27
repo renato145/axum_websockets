@@ -2,7 +2,9 @@ use crate::{
     configuration::WebsocketSettings,
     error::WebsocketError,
     message::{ClientMessage, ResultMessage, TaskMessage, WebsocketMessage},
-    subsystems::{python_repo::PythonRepoSystem, Subsystem, WebsocketSystem},
+    subsystems::{
+        pc_usage::PcUsageSystem, python_repo::PythonRepoSystem, Subsystem, WebsocketSystem,
+    },
     telemetry::tokio_spawn,
 };
 use anyhow::Context;
@@ -73,16 +75,26 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
         async move { python_repo_system.handle_messages(python_repo_rx, tx).await }
     });
 
+    let pc_usage_system = PcUsageSystem {};
+    let (pc_usage_tx, pc_usage_rx) = mpsc::channel(32);
+    let mut pc_usage_task = tokio_spawn({
+        let tx = tx.clone();
+        async move { pc_usage_system.handle_messages(pc_usage_rx, tx).await }
+    });
+
     let mut client_recv_task = tokio_spawn({
         let session = session.clone();
         let tx = tx.clone();
-        async move { client_receive_task(socket_receiver, session, tx, python_repo_tx).await }
+        async move {
+            client_receive_task(socket_receiver, session, tx, python_repo_tx, pc_usage_tx).await
+        }
     });
 
     let (result, _, _) = futures::future::select_all(vec![
         &mut client_recv_task,
         &mut recv_task,
         &mut python_repo_task,
+        &mut pc_usage_task,
         &mut hb_task,
     ])
     .await;
@@ -104,6 +116,7 @@ async fn client_receive_task(
     session: Arc<Session>,
     sender: mpsc::Sender<WebsocketMessage>,
     python_repo_tx: mpsc::Sender<TaskMessage>,
+    pc_usage_tx: mpsc::Sender<TaskMessage>,
 ) -> Result<(), WebsocketError> {
     while let Some(msg) = socket_receiver.next().await {
         match msg {
@@ -112,11 +125,13 @@ async fn client_receive_task(
                 tracing::trace!("Received: {:?}", msg);
                 match msg {
                     Message::Text(msg) => match serde_json::from_str::<ClientMessage>(&msg) {
-                        Ok(msg) => match msg.system {
-                            WebsocketSystem::PythonRepo => {
-                                python_repo_tx.send(msg.into()).await?;
-                            }
-                        },
+                        Ok(msg) => {
+                            let tx = match msg.system {
+                                WebsocketSystem::PythonRepo => &python_repo_tx,
+                                WebsocketSystem::PcUsage => &pc_usage_tx,
+                            };
+                            tx.send(msg.into()).await?;
+                        }
                         Err(e) => {
                             tracing::info!("Failed to deserialize message: {:?}", e);
                             sender

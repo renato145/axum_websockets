@@ -1,5 +1,5 @@
 use crate::helpers::spawn_app;
-use actix_websockets::websocket::{message::WebsocketSystems, pc_usage::CpuLoadResult};
+use axum_websockets::subsystems::{pc_usage::CpuLoadResult, WebsocketSystem};
 
 #[actix_rt::test]
 async fn cpu_load_receives_results() {
@@ -16,7 +16,7 @@ async fn cpu_load_receives_results() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    assert_eq!(result.system.unwrap(), WebsocketSystems::PcUsage);
+    assert_eq!(result.system.unwrap(), WebsocketSystem::PcUsage);
     assert!(result.success, "Call was not successful.");
     let payload = serde_json::from_value::<Vec<CpuLoadResult>>(result.payload)
         .expect("Failed to deserialize result.");
@@ -37,6 +37,6 @@ async fn receive_error_on_invalid_task_name() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    assert_eq!(result.system.unwrap(), WebsocketSystems::PcUsage);
+    assert_eq!(result.system.unwrap(), WebsocketSystem::PcUsage);
     assert!(!result.success, "Call should not success.");
 }

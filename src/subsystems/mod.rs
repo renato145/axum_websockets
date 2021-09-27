@@ -1,3 +1,4 @@
+pub mod pc_usage;
 pub mod python_repo;
 
 use crate::{
@@ -12,6 +13,7 @@ use tokio::sync::mpsc;
 #[serde(rename_all = "snake_case")]
 pub enum WebsocketSystem {
     PythonRepo,
+    PcUsage,
 }
 
 #[async_trait::async_trait]
@@ -29,7 +31,8 @@ pub trait Subsystem {
 
     #[tracing::instrument(
         name = "Handling subsystem message",
-        skip(self, internal_receiver, sender)
+        skip(self, internal_receiver, sender),
+		fields(subsystem=tracing::field::Empty)
     )]
     async fn handle_messages(
         &self,
@@ -41,6 +44,7 @@ pub trait Subsystem {
         Self::Task: DeserializeOwned + Send,
         Self::Error: std::error::Error,
     {
+        tracing::Span::current().record("subsystem", &tracing::field::debug(self.system()));
         while let Some(msg) = internal_receiver.recv().await {
             tracing::debug!("Received: {:?}", msg);
             let result = match serde_json::from_str::<Self::Task>(&format!("{:?}", msg.name))
