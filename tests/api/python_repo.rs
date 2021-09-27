@@ -1,5 +1,5 @@
 use crate::helpers::spawn_app;
-use actix_websockets::websocket::message::WebsocketSystems;
+use axum_websockets::subsystems::WebsocketSystem;
 
 #[actix_rt::test]
 async fn get_files_receive_python_files_on_valid_path() {
@@ -17,7 +17,7 @@ async fn get_files_receive_python_files_on_valid_path() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
+    assert_eq!(result.system.unwrap(), WebsocketSystem::PythonRepo);
     assert!(result.success, "Call was not successful.");
     let payload = result.payload.to_string();
     assert!(
@@ -41,7 +41,7 @@ async fn get_files_receive_error_on_invalid_path() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
+    assert_eq!(result.system.unwrap(), WebsocketSystem::PythonRepo);
     assert!(!result.success, "Call should not success.");
 }
 
@@ -59,6 +59,6 @@ async fn receive_error_on_invalid_task_name() {
     let result = app.get_first_result(&message).await;
 
     // Assert
-    assert_eq!(result.system.unwrap(), WebsocketSystems::PythonRepo);
+    assert_eq!(result.system.unwrap(), WebsocketSystem::PythonRepo);
     assert!(!result.success, "Call should not success.");
 }

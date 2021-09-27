@@ -8,7 +8,7 @@ use anyhow::Context;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WebsocketSystem {
     PythonRepo,

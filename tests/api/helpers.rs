@@ -31,7 +31,7 @@ pub struct TestApp {
 impl TestApp {
     pub async fn get_first_result(&self, message: &str) -> ResultMessage {
         let (_response, mut connection) = Client::new()
-            .ws(format!("{}/ws/", self.address))
+            .ws(format!("{}/ws", self.address))
             .connect()
             .await
             .expect("Failed to connect to websocket.");
