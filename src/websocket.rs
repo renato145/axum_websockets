@@ -14,7 +14,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Instant,
 };
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 pub struct Session {
     hb: Mutex<Instant>,
@@ -31,7 +31,7 @@ impl Session {
 
     /// Sends ping to client every x seconds.
     /// Also checks heartbeats from client.
-    #[tracing::instrument(name = "Heartbeat task", level = "debug", skip(self, sender))]
+    #[tracing::instrument(name = "Heartbeat task", level = "trace", skip(self, sender))]
     async fn hb(&self, sender: mpsc::Sender<WebsocketMessage>) -> Result<(), WebsocketError> {
         let mut interval = tokio::time::interval(self.settings.heartbeat_interval);
         loop {
@@ -46,7 +46,7 @@ impl Session {
                 return Ok(());
             }
             // Send ping
-            tracing::debug!("Sending ping.");
+            tracing::trace!("Sending ping.");
             sender.send(WebsocketMessage::Ping(vec![])).await?;
         }
     }
@@ -61,13 +61,16 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
     let mut recv_task = tokio::spawn(receive_message(rx, socket_sender));
     let mut hb_task = tokio::spawn({
         let tx = tx.clone();
+        let session = session.clone();
         async move { session.hb(tx).await }
     });
 
     let python_repo_system = PythonRepoSystem {};
-    let (python_repo_tx, python_repo_rx) = oneshot::channel();
-    let mut python_repo_task =
-        tokio::spawn(async move { python_repo_system.handle_messages(python_repo_rx, tx).await });
+    let (python_repo_tx, python_repo_rx) = mpsc::channel(32);
+    let mut python_repo_task = tokio::spawn({
+        let tx = tx.clone();
+        async move { python_repo_system.handle_messages(python_repo_rx, tx).await }
+    });
 
     let mut client_recv_task = tokio::spawn({
         let session = session.clone();
@@ -78,8 +81,8 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
     let result = tokio::select! {
         a = (&mut client_recv_task) => a,
         b = (&mut recv_task) => b,
-        c = (&mut python_repo_task) => c
-        d = (&mut hb_task) => d
+        c = (&mut python_repo_task) => c,
+        d = (&mut hb_task) => d,
     };
 
     match result {
@@ -91,25 +94,25 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
 
 #[tracing::instrument(
     name = "Client receiver task",
-    level = "debug",
+    level = "trace",
     skip(socket_receiver, session, sender, python_repo_tx)
 )]
 async fn client_receive_task(
     mut socket_receiver: SplitStream<WebSocket>,
     session: Arc<Session>,
     sender: mpsc::Sender<WebsocketMessage>,
-    python_repo_tx: oneshot::Sender<TaskMessage>,
+    python_repo_tx: mpsc::Sender<TaskMessage>,
 ) -> Result<(), WebsocketError> {
     while let Some(msg) = socket_receiver.next().await {
         match msg {
             Err(e) => tracing::info!("Client disconnected: {:?}", e),
             Ok(msg) => {
-                tracing::debug!("Received: {:?}", msg);
+                tracing::trace!("Received: {:?}", msg);
                 match msg {
                     Message::Text(msg) => match serde_json::from_str::<ClientMessage>(&msg) {
                         Ok(msg) => match msg.system {
                             WebsocketSystem::PythonRepo => {
-                                python_repo_tx.send(msg.into());
+                                python_repo_tx.send(msg.into()).await?;
                             }
                         },
                         Err(e) => {
@@ -141,7 +144,7 @@ async fn client_receive_task(
 
 #[tracing::instrument(
     name = "Internal receiver task",
-    level = "debug"
+    level = "trace"
     skip(rx, socket_sender),
 )]
 async fn receive_message(
@@ -149,7 +152,7 @@ async fn receive_message(
     mut socket_sender: SplitSink<WebSocket, Message>,
 ) -> Result<(), WebsocketError> {
     while let Some(msg) = rx.recv().await {
-        tracing::debug!("Received: {:?}", msg);
+        tracing::trace!("Received: {:?}", msg);
         match msg {
             WebsocketMessage::Ping(msg) => {
                 socket_sender

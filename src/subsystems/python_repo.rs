@@ -42,11 +42,12 @@ impl std::fmt::Debug for PythonRepoError {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Task {
     GetFiles,
 }
 
-#[tracing::instrument(name = "GetFiles")]
+#[tracing::instrument(name = "GetFiles task")]
 fn get_files(payload: serde_json::Value) -> Result<serde_json::Value, PythonRepoError> {
     let path = payload.to_string();
     if !Path::new(&path).exists() {

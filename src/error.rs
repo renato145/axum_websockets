@@ -1,4 +1,3 @@
-use crate::message::WebsocketMessage;
 use tokio::sync::mpsc;
 
 pub fn error_chain_fmt(
@@ -28,8 +27,8 @@ impl std::fmt::Debug for WebsocketError {
     }
 }
 
-impl From<mpsc::error::SendError<WebsocketMessage>> for WebsocketError {
-    fn from(_: mpsc::error::SendError<WebsocketMessage>) -> Self {
+impl<T> From<mpsc::error::SendError<T>> for WebsocketError {
+    fn from(_: mpsc::error::SendError<T>) -> Self {
         WebsocketError::MpscSendError
     }
 }

@@ -18,6 +18,7 @@ pub struct ClientMessage {
     pub payload: serde_json::Value,
 }
 
+#[derive(Debug)]
 pub struct TaskMessage {
     pub name: String,
     pub payload: serde_json::Value,
@@ -49,7 +50,7 @@ impl ResultMessage {
         }
     }
 
-    pub fn from_error<E: std::error::Error>(e: E, system: Option<WebsocketSystem>) -> Self {
+    pub fn from_error<E: ToString>(e: E, system: Option<WebsocketSystem>) -> Self {
         let payload = serde_json::Value::String(e.to_string());
         Self {
             system,
