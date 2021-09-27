@@ -78,12 +78,13 @@ pub async fn handle_socket(socket: WebSocket, settings: Arc<WebsocketSettings>) 
         async move { client_receive_task(socket_receiver, session, tx, python_repo_tx).await }
     });
 
-    let result = tokio::select! {
-        a = (&mut client_recv_task) => a,
-        b = (&mut recv_task) => b,
-        c = (&mut python_repo_task) => c,
-        d = (&mut hb_task) => d,
-    };
+    let (result, _, _) = futures::future::select_all(vec![
+        &mut client_recv_task,
+        &mut recv_task,
+        &mut python_repo_task,
+        &mut hb_task,
+    ])
+    .await;
 
     match result {
         Ok(Err(e)) => tracing::info!("Got WebsocketError: {:?}", e),
