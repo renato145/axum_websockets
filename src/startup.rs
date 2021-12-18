@@ -1,8 +1,7 @@
 use axum::{
     extract::{Extension, WebSocketUpgrade},
-    handler::get,
     response::IntoResponse,
-    routing::BoxRoute,
+    routing::get,
     AddExtensionLayer, Router,
 };
 use tower_http::{
@@ -20,7 +19,7 @@ use std::{net::TcpListener, sync::Arc};
 pub struct Application {
     listener: TcpListener,
     port: u16,
-    app: Router<BoxRoute>,
+    app: Router,
 }
 
 impl Application {
@@ -48,7 +47,7 @@ impl Application {
     }
 }
 
-fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
+fn build_app(websocket_settings: WebsocketSettings) -> Router {
     tracing::info!("{:?}", websocket_settings);
     let websocket_settings = Arc::new(websocket_settings);
 
@@ -66,7 +65,6 @@ fn build_app(websocket_settings: WebsocketSettings) -> Router<BoxRoute> {
                 ),
         )
         .layer(AddExtensionLayer::new(websocket_settings))
-        .boxed()
 }
 
 async fn ws_handler(

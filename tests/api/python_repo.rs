@@ -9,7 +9,6 @@ async fn get_files_receive_python_files_on_valid_path() {
         "system": "python_repo",
         "task": "get_files",
         "payload": "tests/examples"
-
     })
     .to_string();
 

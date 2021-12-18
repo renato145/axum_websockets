@@ -6,10 +6,10 @@ use tracing_subscriber::{
 };
 
 /// Compose multiple layers into a tracing subscriber
-pub fn get_subscriber(
+pub fn get_subscriber<W: for<'a> MakeWriter<'a> + Send + Sync + 'static>(
     name: String,
     env_filter: String,
-    sink: impl MakeWriter + Send + Sync + 'static,
+    sink: W,
 ) -> impl Subscriber + Send + Sync {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));

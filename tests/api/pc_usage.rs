@@ -8,7 +8,6 @@ async fn cpu_load_receives_results() {
     let message = serde_json::json!({
         "system": "pc_usage",
         "task":  "cpu_load",
-
     })
     .to_string();
 
