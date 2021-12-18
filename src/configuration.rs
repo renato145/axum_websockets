@@ -9,6 +9,8 @@ use std::{
 pub struct Settings {
     pub host: String,
     pub port: u16,
+    /// Enable tokio-console
+    pub console: bool,
     pub websocket: WebsocketSettings,
 }
 

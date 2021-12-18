@@ -8,16 +8,30 @@ use tracing_subscriber::{
 /// Compose multiple layers into a tracing subscriber
 pub fn get_subscriber<W: for<'a> MakeWriter<'a> + Send + Sync + 'static>(
     name: String,
-    env_filter: String,
+    mut env_filter: String,
     sink: W,
-) -> impl Subscriber + Send + Sync {
+    tokio_console: bool,
+) -> Box<dyn Subscriber + Send + Sync> {
+    if tokio_console {
+        env_filter.push_str(",tokio=trace,runtime=trace");
+    }
+
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
     let formatting_layer = BunyanFormattingLayer::new(name, sink);
-    Registry::default()
+
+    let registry = Registry::default()
         .with(env_filter)
         .with(JsonStorageLayer)
-        .with(formatting_layer)
+        .with(formatting_layer);
+
+    if tokio_console {
+        // spawn the console server in the background, returning a `Layer`:
+        let console_layer = console_subscriber::spawn();
+        Box::new(registry.with(console_layer))
+    } else {
+        Box::new(registry)
+    }
 }
 
 /// Register a subscriber as a global default to proces span data.

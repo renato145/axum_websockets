@@ -27,7 +27,8 @@ tracing-log = "0.1.2"
 glob = "0.3"
 uuid = { version = "0.8.2", features = ["v4"] }
 systemstat = "0.1.8"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.15", features = ["full", "tracing"] }
+console-subscriber = "0.1"
 hyper = { version = "0.14", features = ["full"] }
 tower-http = { version = "0.2", features = ["fs", "trace"] }
 axum = { version = "0.4", features = ["ws", "headers"] }

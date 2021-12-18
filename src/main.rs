@@ -6,10 +6,15 @@ use axum_websockets::{
 
 #[tokio::main]
 async fn main() -> Result<(), hyper::Error> {
-    let subscriber = get_subscriber("actix_websockets".into(), "info".into(), std::io::stdout);
+    let configuration = get_configuration().expect("Failed to read configuration.");
+    let subscriber = get_subscriber(
+        "actix_websockets".into(),
+        "info".into(),
+        std::io::stdout,
+        configuration.console,
+    );
     init_subscriber(subscriber);
 
-    let configuration = get_configuration().expect("Failed to read configuration.");
     let application = Application::build(configuration).expect("Failed to build application.");
     application.run_until_stopped().await?;
     Ok(())
